@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sвязь-Телеком: AI Support Pro</title>
+    <title>Интеллектуальный помощник</title>
     <style>
-        /* [ВЕСЬ ВАШ ДИЗАЙН СОХРАНЕН] */
         :root {
             --bg-dark: #0a0e17;
             --bg-panel: #111827;
             --primary: #10b981;
             --accent: #22d3ee;
             --text-main: #f3f4f6;
+            --text-muted: #94a3b8;
+            --bot-bubble: #1f2937;
+            --user-bubble: #0f172a;
             --border: rgba(255, 255, 255, 0.08);
         }
 
@@ -19,11 +21,11 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
         }
 
         body {
-            background: #0f172a;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
@@ -42,15 +44,27 @@
             height: 100%;
             background-image: radial-gradient(var(--border) 1px, transparent 1px);
             background-size: 30px 30px;
-            opacity: 0.5;
             z-index: 1;
+            opacity: 0.5;
+        }
+
+        .bg-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 100px 100px;
+            z-index: 2;
+            opacity: 0.2;
         }
 
         .support-container {
             width: 100%;
-            max-width: 1100px;
+            max-width: 1000px;
             display: grid;
-            grid-template-columns: 1fr 380px;
+            grid-template-columns: 1fr 400px;
             gap: 25px;
             z-index: 10;
             position: relative;
@@ -60,27 +74,30 @@
             background: var(--bg-panel);
             border-radius: 16px;
             border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
             display: flex;
             flex-direction: column;
             height: 750px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
         .chat-header {
-            padding: 20px;
-            background: rgba(255,255,255,0.02);
-            border-bottom: 1px solid var(--border);
+            padding: 20px 25px;
+            background: linear-gradient(90deg, #111827, #1f2937);
+            color: white;
+            border-radius: 16px 16px 0 0;
+            font-weight: bold;
             display: flex;
             align-items: center;
             gap: 10px;
+            border-bottom: 1px solid var(--border);
         }
 
         .logo-box {
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             background: var(--primary);
             border-radius: 4px;
-            box-shadow: 0 0 10px var(--primary);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
         }
 
         #chat-messages {
@@ -90,6 +107,8 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
         }
 
         .message {
@@ -98,113 +117,162 @@
             max-width: 85%;
             font-size: 14px;
             line-height: 1.5;
+            position: relative;
         }
 
         .user-msg {
-            background: #1e293b;
+            background: var(--user-bubble);
             align-self: flex-end;
             border-bottom-right-radius: 4px;
         }
 
         .bot-msg {
-            background: #1f2937;
+            background: var(--bot-bubble);
             align-self: flex-start;
             border-bottom-left-radius: 4px;
             border: 1px solid var(--border);
         }
 
         .input-area {
-            padding: 20px;
+            padding: 20px 25px;
             border-top: 1px solid var(--border);
             display: flex;
             gap: 12px;
+            background: var(--bg-panel);
+            border-radius: 0 0 16px 16px;
         }
 
         input {
             flex: 1;
-            padding: 12px;
-            background: rgba(0,0,0,0.3);
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--border);
             border-radius: 10px;
-            color: white;
             outline: none;
+            color: var(--text-main);
+            transition: 0.3s;
         }
 
+            input:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+            }
+
         button {
-            padding: 12px 20px;
+            padding: 12px 24px;
             background: var(--primary);
+            color: #064e3b;
             border: none;
             border-radius: 10px;
             cursor: pointer;
             font-weight: bold;
-            color: #064e3b;
+            transition: 0.2s;
         }
 
-        .analytics-panel {
-            background: #0d1117;
-            padding: 25px;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            font-family: monospace;
-            font-size: 13px;
-        }
-
-        .ticket-card {
-            background: rgba(16, 185, 129, 0.05);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-        }
-
-        .status-pill {
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: rgba(34, 211, 238, 0.1);
-            color: var(--accent);
-            font-size: 11px;
-            margin-left: auto;
-        }
+            button:hover {
+                filter: brightness(1.05);
+                box-shadow: 0 0 8px rgba(16, 185, 129, 0.18);
+            }
 
         .option-btn {
             background: transparent;
             color: var(--accent);
             border: 1px solid var(--accent);
-            margin: 5px 5px 0 0;
-            padding: 6px 12px;
+            margin: 6px 6px 0 0;
+            padding: 7px 15px;
+            font-size: 13px;
             border-radius: 8px;
             cursor: pointer;
+        }
+
+            .option-btn:hover {
+                background: rgba(34, 211, 238, 0.1);
+                color: white;
+            }
+
+        .analytics-panel {
+            background: #0d1117;
+            color: #eceff1;
+            padding: 30px;
+            border-radius: 16px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            border: 1px solid var(--border);
+        }
+
+        .status-tag {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 6px;
+            background: rgba(255, 202, 40, 0.1);
+            margin-top: 15px;
+            color: #ffca28;
+            border: 1px solid rgba(255, 202, 40, 0.2);
+        }
+
+        .details-box {
+            background: rgba(129, 212, 250, 0.05);
+            padding: 12px;
+            margin-top: 15px;
+            border-left: 3px solid #81d4fa;
+            font-style: italic;
+            color: #b3e5fc;
+        }
+
+        .skip-btn {
+            background: #ef4444;
+            color: #7f1d1d;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .loading-pill {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(34, 211, 238, 0.1);
+            color: #67e8f9;
+            border: 1px solid rgba(34, 211, 238, 0.22);
             font-size: 12px;
+            font-weight: 600;
+        }
+
+        .muted {
+            color: var(--text-muted);
         }
     </style>
 </head>
 <body>
     <div class="bg-dots"></div>
+    <div class="bg-grid"></div>
 
     <div class="support-container">
         <div class="chat-window">
             <div class="chat-header">
                 <div class="logo-box"></div>
-                <strong>Связь-Телеком: AI</strong>
-                <span id="model-status" class="status-pill">Загрузка...</span>
+                Связь-Телеком: Интеллектуальный помощник
+                <span id="model-status" class="loading-pill">Модель не загружена</span>
             </div>
             <div id="chat-messages">
-                <div class="message bot-msg">Здравствуйте! Опишите вашу проблему, я постараюсь помочь.</div>
+                <div class="message bot-msg">Здравствуйте! Опишите вашу проблему. Я постараюсь помочь или подготовлю обращение к специалистам.</div>
             </div>
             <div class="input-area">
-                <input type="text" id="user-input" placeholder="Ваш вопрос..." autocomplete="off">
+                <input type="text" id="user-input" placeholder="Введите ваш вопрос..." autocomplete="off" />
                 <button onclick="handleSend()">Отправить</button>
+            </div>
+            <div style="padding: 0 25px 25px;">
+                <button class="skip-btn" onclick="startClassification('Критический')">⚡ Сразу вызвать оператора</button>
             </div>
         </div>
 
         <div class="analytics-panel">
-            <h4 style="color: var(--accent); margin-bottom: 15px;">📊 Мониторинг системы</h4>
-            <div id="logs" style="color: #94a3b8">> Ожидание инициализации...</div>
-            <div id="ticket-area" style="display: none;">
-                <div class="ticket-card">
-                    <b style="color: var(--primary)">[✓] ТИКЕТ СОЗДАН</b>
-                    <div id="ticket-data" style="margin-top: 10px; line-height: 1.6;"></div>
-                </div>
+            <h4 style="color: #81d4fa; margin-top: 0;">💻 Логика системы</h4>
+            <hr style="border: 0.5px solid #455a64; margin: 15px 0;">
+            <div id="logs">Система готова...</div>
+            <div id="final-ticket" style="margin-top: 25px; display: none; border-top: 1px dashed #546e7a; padding-top: 15px;">
+                <p style="color: #4caf50; font-weight: bold;">[✓] ТИКЕТ АКТИВЕН</p>
+                <div id="ticket-info"></div>
             </div>
         </div>
     </div>
@@ -212,110 +280,301 @@
     <script type="module">
         import { pipeline } from 'https://esm.sh/@huggingface/transformers@3.8.1';
 
-        const MODEL_ID = 'onnx-community/Qwen2.5-1.5B-Instruct';
-        let generator = null;
-        let ticket = { id: null, active: false, details: [] };
-
+        const departments = ["Техническая поддержка", "Финансовый отдел", "Абонентский отдел", "Общая поддержка"];
         const knowledgeBase = [
-            { keywords: ['интернет', 'не работает', 'связь'], solution: "Рекомендуем перезагрузить роутер и проверить кабель WAN.", category: "Техподдержка" },
-            { keywords: ['оплата', 'деньги', 'баланс'], solution: "Проверить баланс можно в ЛК. Мы поддерживаем оплату картами СБП.", category: "Финансовый отдел" }
+            { keywords: ['интернет', 'не работает', 'связь', 'сеть', 'wi-fi', 'вайфай'], solution: "Проверьте питание роутера и плотность кабеля в порту WAN. Попробуйте перезагрузку устройства.", category: "Техническая поддержка" },
+            { keywords: ['деньги', 'баланс', 'оплата', 'счет', 'платеж'], solution: "Баланс можно проверить в Личном кабинете. При нулевом балансе доступен 'Доверительный платеж'.", category: "Финансовый отдел" },
+            { keywords: ['тариф', 'сменить', 'договор', 'подключить', 'акция', 'телевидение'], solution: "Вы можете изменить тарифный план в Личном кабинете или мобильном приложении.", category: "Абонентский отдел" }
         ];
 
-        async function initModel() {
-            const status = document.getElementById('model-status');
-            try {
-                // Попытка WebGPU
-                generator = await pipeline('text-generation', MODEL_ID, {
-                    device: 'webgpu',
-                    dtype: 'q4'
-                });
-                status.textContent = "AI Ready (GPU)";
-            } catch (e) {
-                console.error("WebGPU failed, falling back to CPU", e);
-                // Попытка CPU (медленнее, но надежнее для AMD ноутбуков)
-                generator = await pipeline('text-generation', MODEL_ID, {
-                    device: 'cpu',
-                    dtype: 'q4'
-                });
-                status.textContent = "AI Ready (CPU)";
+        const messagesContainer = document.getElementById('chat-messages');
+        const logsContainer = document.getElementById('logs');
+        const modelStatus = document.getElementById('model-status');
+
+        let hasActiveTicket = false;
+        let isWaitingForDetails = false;
+        let modelLoadingPromise = null;
+        let generator = null;
+        let ticketData = {
+            id: null,
+            category: "",
+            priority: "Средний",
+            details: [],
+            summary: "",
+            generatedReply: ""
+        };
+
+        // ЗАМЕНА 1: Перешли на более умную модель с русским языком
+        const MODEL_ID = 'Xenova/Qwen1.5-0.5B-Chat';
+
+        function setLogs(text) {
+            logsContainer.innerHTML = text;
+        }
+
+        function appendLog(text) {
+            logsContainer.innerHTML += `${text}<br>`;
+        }
+
+        function setModelStatus(text) {
+            modelStatus.textContent = text;
+        }
+
+        async function loadModel() {
+            if (generator) return generator;
+            if (!modelLoadingPromise) {
+                setModelStatus('Загрузка модели...');
+                setLogs('> Подготовка локальной модели...<br>');
+
+                const options = {
+                    device: 'webgpu', // Qwen отлично работает на современных GPU
+                    dtype: 'q4',
+                };
+
+                // ЗАМЕНА 2: Используем text-generation вместо text2text-generation
+                modelLoadingPromise = pipeline('text-generation', MODEL_ID, options)
+                    .then((pipe) => {
+                        generator = pipe;
+                        setModelStatus('Модель готова (GPU)');
+                        appendLog('> Модель загружена через WebGPU');
+                        return pipe;
+                    })
+                    .catch(async (error) => {
+                        console.warn("WebGPU недоступен, пробуем CPU (WASM)...", error);
+                        appendLog('> Переход на процессорный режим (WASM)...');
+                        const cpuPipe = await pipeline('text-generation', MODEL_ID, { dtype: 'q4' });
+                        generator = cpuPipe;
+                        setModelStatus('Модель готова (CPU)');
+                        return cpuPipe;
+                    });
             }
+            return modelLoadingPromise;
+        }
+
+        function sanitizeText(value) {
+            return String(value || '').replace(/<[^>]*>/g, '').trim();
+        }
+
+        function fallbackAnalyze(text) {
+            const lowered = text.toLowerCase();
+            let bestMatch = null;
+            let maxMatches = 0;
+
+            for (const item of knowledgeBase) {
+                const matches = item.keywords.filter(word => lowered.includes(word));
+                if (matches.length > maxMatches) {
+                    maxMatches = matches.length;
+                    bestMatch = item;
+                }
+            }
+
+            if (bestMatch && maxMatches > 0) {
+                const priority = maxMatches > 1 ? 'Высокий' : 'Средний';
+                return {
+                    category: bestMatch.category,
+                    priority,
+                    summary: `Обращение связано с темой: ${bestMatch.category.toLowerCase()}.`,
+                    response: bestMatch.solution,
+                    createTicket: true
+                };
+            }
+
+            return {
+                category: 'Общая поддержка',
+                priority: 'Высокий',
+                summary: 'Запрос не удалось уверенно классифицировать по ключевым словам.',
+                response: 'Я не нашёл точный ответ в базе знаний. Могу подготовить заявку специалистам и передать краткое описание обращения.',
+                createTicket: true
+            };
+        }
+
+        async function analyzeWithModel(text) {
+            const pipe = await loadModel();
+            if (!pipe) return fallbackAnalyze(text);
+
+            // ЗАМЕНА 3: Промпт в формате ChatML для Qwen
+            const prompt = `<|im_start|>system\nТы — техническая поддержка интернет-провайдера "Связь-Телеком". Твоя задача — дать клиенту один короткий и полезный совет на русском языке (1-2 предложения).<|im_end|>\n<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
+
+            try {
+                const result = await pipe(prompt, {
+                    max_new_tokens: 60,
+                    temperature: 0.3,
+                    repetition_penalty: 1.1,
+                    do_sample: true,
+                    // ЗАМЕНА 4: Не возвращать промпт в ответе
+                    return_full_text: false
+                });
+
+                let generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
+                console.log("ОТВЕТ НЕЙРОСЕТИ:", generated);
+
+                // Очищаем хвосты от формата ChatML, если они проскочили
+                const finalResponse = generated.replace(/<\|im_end\|>/g, '').trim();
+
+                if (!finalResponse) throw new Error("Пустой ответ от модели");
+
+                let category = "Общая поддержка";
+                const lowText = text.toLowerCase();
+                if (lowText.includes("интернет") || lowText.includes("пинг") || lowText.includes("отваливается")) {
+                    category = "Техническая поддержка";
+                } else if (lowText.includes("деньги") || lowText.includes("баланс") || lowText.includes("оплат")) {
+                    category = "Финансовый отдел";
+                } else if (lowText.includes("тариф") || lowText.includes("договор")) {
+                    category = "Абонентский отдел";
+                }
+
+                return {
+                    category: category,
+                    priority: lowText.includes("не работает") ? "Высокий" : "Средний",
+                    summary: text.slice(0, 60),
+                    response: finalResponse,
+                    createTicket: true
+                };
+            } catch (error) {
+                console.error("Ошибка генерации:", error);
+                return fallbackAnalyze(text);
+            }
+        }
+
+        function createOptionButtons(options) {
+            const btnContainer = document.createElement('div');
+            btnContainer.style.marginTop = '10px';
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => handleOptionSelection(opt);
+                btnContainer.appendChild(btn);
+            });
+            messagesContainer.appendChild(btnContainer);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function addMessage(text, className) {
+            const msg = document.createElement('div');
+            msg.className = `message ${className}`;
+            msg.innerHTML = text;
+            messagesContainer.appendChild(msg);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function refreshTicketView() {
+            const finalTicket = document.getElementById('final-ticket');
+            const ticketInfo = document.getElementById('ticket-info');
+            finalTicket.style.display = 'block';
+
+            const detailsHtml = ticketData.details.length > 0
+                ? `<div class="details-box">Доп. информация: ${ticketData.details.join('; ')}</div>`
+                : '';
+
+            ticketInfo.innerHTML = `
+                            <div class="status-tag">ID: #${ticketData.id}</div><br>
+                            <div style="margin-top:10px;">
+                                <b>Отдел:</b> ${ticketData.category}<br>
+                                <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
+                                <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
+                                ${detailsHtml}
+                            </div>
+                        `;
         }
 
         async function handleSend() {
             const input = document.getElementById('user-input');
             const text = input.value.trim();
-            if (!text || ticket.active) return;
+            if (!text) return;
 
-            addMsg(text, 'user-msg');
+            addMessage(sanitizeText(text), 'user-msg');
             input.value = '';
-            document.getElementById('logs').innerHTML = `> Анализ: ${text.slice(0, 20)}...<br>> Поиск решения...`;
 
-            // 1. Проверка базы знаний
-            const kbMatch = knowledgeBase.find(k => k.keywords.some(w => text.toLowerCase().includes(w)));
-            let response = "";
-
-            if (kbMatch) {
-                response = kbMatch.solution;
-                document.getElementById('logs').innerHTML += `<br>> Найдено в базе знаний`;
-            } else {
-                // 2. Использование AI с защитой от иероглифов
-                const prompt = `<|im_start|>system\nТы — поддержка "Связь-Телеком". Ответь кратко на русском (1 фраза).<|im_end|>\n<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
-
-                try {
-                    const out = await generator(prompt, {
-                        max_new_tokens: 45,
-                        temperature: 0.1, // Минимальная случайность для стабильности
-                        stop_sequences: ['<|im_end|>', 'User:', '\n'], // Остановка на тех. тегах
-                        return_full_text: false
-                    });
-
-                    response = out[0].generated_text.trim();
-                    // Очистка от остаточного мусора (включая китайские символы)
-                    response = response.split('<|im_end|>')[0].replace(/[^а-яА-ЯёЁa-zA-Z0-9\s.,!?\-]/g, '');
-                } catch (err) {
-                    response = "Извините, сейчас я не могу обработать запрос. Перевожу на оператора.";
-                }
+            if (isWaitingForDetails) {
+                ticketData.details.push(sanitizeText(text));
+                isWaitingForDetails = false;
+                setLogs(`> Дополнительные сведения добавлены в заявку #${ticketData.id}<br>`);
+                addMessage('Информация успешно прикреплена к вашей заявке.', 'bot-msg');
+                refreshTicketView();
+                return;
             }
 
-            addMsg(response, 'bot-msg');
-            createOptions(['Создать заявку', 'Спасибо, не надо']);
+            if (hasActiveTicket) {
+                setLogs(`> Активная заявка #${ticketData.id}<br>`);
+                addMessage(`У вас уже есть открытая заявка в <b>${ticketData.category}</b>. Что вы хотите сделать?`, 'bot-msg');
+                createOptionButtons(['Изменить отдел', 'Дополнить детали', 'Отменить заявку']);
+                return;
+            }
+
+            setLogs(`> Анализ запроса: "${sanitizeText(text).toLowerCase()}"<br>`);
+            appendLog('> Запуск нейросетевого модуля...');
+
+            addMessage('Анализирую обращение...', 'bot-msg');
+
+            const ai = await analyzeWithModel(text);
+            ticketData.category = ai.category;
+            ticketData.priority = ai.priority;
+            ticketData.summary = ai.summary;
+            ticketData.generatedReply = ai.response;
+
+            setLogs(`> Категория: ${ticketData.category}<br>> Приоритет: ${ticketData.priority}<br>> Сводка готова<br>`);
+
+            addMessage(`<b>Ответ:</b> ${ai.response}<br><br>Если нужно, я подготовлю заявку специалистам.`, 'bot-msg');
+            createOptionButtons(['Да, создать заявку', 'Нет, спасибо']);
         }
 
-        function createOptions(opts) {
-            const div = document.createElement('div');
-            opts.forEach(o => {
-                const b = document.createElement('button');
-                b.className = 'option-btn';
-                b.innerText = o;
-                b.onclick = () => {
-                    addMsg(o, 'user-msg');
-                    if (o === 'Создать заявку') makeTicket();
-                    else addMsg("Всегда на связи!", 'bot-msg');
-                };
-                div.appendChild(b);
-            });
-            document.getElementById('chat-messages').appendChild(div);
+        function startClassification(priority) {
+            if (hasActiveTicket) {
+                addMessage('Сначала необходимо изменить текущую заявку или отменить её.', 'bot-msg');
+                return;
+            }
+            ticketData.priority = priority;
+            addMessage('Я не нашёл точный автоматический ответ. Выберите, какой из разделов лучше всего подходит:', 'bot-msg');
+            createOptionButtons(departments);
         }
 
-        function makeTicket() {
-            ticket.id = Math.floor(Math.random() * 8999) + 1000;
-            ticket.active = true;
-            document.getElementById('ticket-area').style.display = 'block';
-            document.getElementById('ticket-data').innerHTML = `ID: #${ticket.id}<br>Статус: В работе<br>Приоритет: Средний`;
-            addMsg(`Заявка #${ticket.id} создана. Специалист свяжется с вами.`, 'bot-msg');
+        function handleOptionSelection(choice) {
+            addMessage(choice, 'user-msg');
+
+            if (choice === 'Изменить отдел') {
+                hasActiveTicket = false;
+                ticketData.category = '';
+                startClassification('Средний');
+            } else if (choice === 'Дополнить детали') {
+                isWaitingForDetails = true;
+                addMessage('Пожалуйста, напишите подробности, и я прикреплю их к вашей заявке.', 'bot-msg');
+            } else if (choice === 'Отменить заявку') {
+                hasActiveTicket = false;
+                ticketData.details = [];
+                ticketData.category = '';
+                document.getElementById('final-ticket').style.display = 'none';
+                addMessage('Заявка успешно отменена.', 'bot-msg');
+                setLogs(`> Заявка #${ticketData.id} аннулирована.<br>`);
+            } else if (choice === 'Да, создать заявку') {
+                if (!ticketData.category) {
+                    startClassification('Средний');
+                    return;
+                }
+                hasActiveTicket = true;
+                ticketData.id = Math.floor(Math.random() * 9000) + 1000;
+                addMessage(`Принято. Отправляю тикет в <b>${ticketData.category}</b>. Приоритет: <b>${ticketData.priority}</b>.`, 'bot-msg');
+                refreshTicketView();
+                setLogs(`> Статус: заявка заблокирована<br>> ID: #${ticketData.id}<br>`);
+            } else if (choice === 'Нет, спасибо') {
+                addMessage('Рад был помочь!', 'bot-msg');
+            } else if (departments.includes(choice)) {
+                hasActiveTicket = true;
+                ticketData.id = Math.floor(Math.random() * 9000) + 1000;
+                ticketData.category = choice;
+                addMessage(`Принято. Отправляю тикет в <b>${choice}</b>. Приоритет: <b>${ticketData.priority}</b>.`, 'bot-msg');
+                refreshTicketView();
+                setLogs(`> Статус: заявка заблокирована<br>> ID: #${ticketData.id}<br>`);
+            }
         }
 
-        function addMsg(t, c) {
-            const m = document.createElement('div');
-            m.className = `message ${c}`;
-            m.innerHTML = t;
-            const container = document.getElementById('chat-messages');
-            container.appendChild(m);
-            container.scrollTop = container.scrollHeight;
-        }
+        document.getElementById('user-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleSend();
+        });
 
-        initModel();
+        loadModel();
         window.handleSend = handleSend;
+        window.startClassification = startClassification;
+        window.handleOptionSelection = handleOptionSelection;
     </script>
 </body>
 </html>
