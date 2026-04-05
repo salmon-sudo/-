@@ -322,19 +322,29 @@
             if (generator) return generator;
             if (!modelLoadingPromise) {
                 setModelStatus('Загрузка модели...');
-                setLogs('> Подготовка локальной модели генерации...<br>');
-                modelLoadingPromise = pipeline('text2text-generation', MODEL_ID)
+                setLogs('> Подготовка локальной модели...<br>');
+
+                // Оптимизация q4 делает модель легкой для Ryzen 5 и быстрой для RTX 4060
+                const options = {
+                    device: 'webgpu',
+                    dtype: 'q4',
+                };
+
+                modelLoadingPromise = pipeline('text2text-generation', MODEL_ID, options)
                     .then((pipe) => {
                         generator = pipe;
-                        setModelStatus('Модель готова');
-                        appendLog('> Локальная модель загружена');
+                        setModelStatus('Модель готова (GPU)');
+                        appendLog('> Модель загружена через WebGPU');
                         return pipe;
                     })
-                    .catch((error) => {
-                        console.error(error);
-                        setModelStatus('Модель не загрузилась');
-                        appendLog('> Не удалось загрузить модель, включён резервный режим');
-                        return null;
+                    .catch(async (error) => {
+                        console.warn("WebGPU недоступен, пробуем CPU (WASM)...", error);
+                        appendLog('> Переход на процессорный режим (WASM)...');
+                        // Резервный запуск на процессоре с легким весом q4
+                        const cpuPipe = await pipeline('text2text-generation', MODEL_ID, { dtype: 'q4' });
+                        generator = cpuPipe;
+                        setModelStatus('Модель готова (CPU)');
+                        return cpuPipe;
                     });
             }
             return modelLoadingPromise;
@@ -392,39 +402,30 @@
             const pipe = await loadModel();
             if (!pipe) return fallbackAnalyze(text);
 
-            const prompt = `Ты интеллектуальный помощник телеком-компании. Работай только на русском языке. Не используй английские слова и не объясняй ход рассуждений.
+            const prompt = `Task: Analyze support ticket. Language: Russian. Return ONLY JSON.
+Context: You are a telecom assistant.
+User message: "${text}"
 
-Нужно обработать обращение пользователя и вернуть СТРОГО JSON без markdown и без лишнего текста.
-
-Формат ответа:
+JSON Format:
 {
       "category": "Техническая поддержка|Финансовый отдел|Абонентский отдел|Общая поддержка",
       "priority": "Критический|Высокий|Средний",
-      "summary": "Краткая сводка обращения в одном предложении",
-      "response": "Естественный полезный ответ пользователю",
+      "summary": "Short summary in Russian",
+      "response": "Helpful answer in Russian",
       "createTicket": true
-}
-
-Правила:
-- Если речь про интернет, роутер, Wi‑Fi, сеть — выбирай Техническая поддержка.
-- Если речь про баланс, оплату, счёт, деньги — выбирай Финансовый отдел.
-- Если речь про тариф, договор, подключение, ТВ, изменение услуги — выбирай Абонентский отдел.
-- Во всех остальных случаях — Общая поддержка.
-- Если проблема мешает пользоваться услугой прямо сейчас, priority должен быть Высокий или Критический.
-- response должен звучать как живой короткий ответ, без шаблонных фраз.
-- summary должна быть очень короткой и нейтральной.
-
-Обращение пользователя: ${text}`;
+}`;
 
             try {
                 const result = await pipe(prompt, {
-                    max_new_tokens: 220,
-                    temperature: 0.8,
-                    top_p: 0.9,
+                    max_new_tokens: 120,
+                    temperature: 0.6,
+                    repetition_penalty: 1.2,
                     do_sample: true
                 });
 
                 const generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
+                console.log("ПОЛНЫЙ ОТВЕТ МОДЕЛИ:", generated); // Теперь ты увидишь это в консоли F12
+
                 const parsed = parseJsonFromModel(generated);
                 if (parsed && parsed.category && parsed.response) {
                     return {
@@ -436,7 +437,7 @@
                     };
                 }
             } catch (error) {
-                console.error(error);
+                console.error("Генерация прервана:", error);
             }
 
             return fallbackAnalyze(text);
@@ -474,14 +475,14 @@
                 : '';
 
             ticketInfo.innerHTML = `
-                    <div class="status-tag">ID: #${ticketData.id}</div><br>
-                    <div style="margin-top:10px;">
-                        <b>Отдел:</b> ${ticketData.category}<br>
-                        <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
-                        <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
-                        ${detailsHtml}
-                    </div>
-                `;
+                        <div class="status-tag">ID: #${ticketData.id}</div><br>
+                        <div style="margin-top:10px;">
+                            <b>Отдел:</b> ${ticketData.category}<br>
+                            <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
+                            <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
+                            ${detailsHtml}
+                        </div>
+                    `;
         }
 
         async function handleSend() {
@@ -509,10 +510,7 @@
             }
 
             setLogs(`> Анализ запроса: "${sanitizeText(text).toLowerCase()}"<br>`);
-            appendLog('> Модуль 1: анализ текста');
-            appendLog('> Модуль 2: классификация обращения');
-            appendLog('> Модуль 3: генерация ответа');
-            appendLog('> Модуль 4: подготовка сводки для тикета');
+            appendLog('> Запуск нейросетевого модуля...');
 
             addMessage('Анализирую обращение...', 'bot-msg');
 
