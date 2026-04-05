@@ -118,6 +118,7 @@
             font-size: 14px;
             line-height: 1.5;
             position: relative;
+            word-break: break-word;
         }
 
         .user-msg {
@@ -236,6 +237,7 @@
             border: 1px solid rgba(34, 211, 238, 0.22);
             font-size: 12px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .muted {
@@ -254,13 +256,16 @@
                 Связь-Телеком: Интеллектуальный помощник
                 <span id="model-status" class="loading-pill">Модель не загружена</span>
             </div>
+
             <div id="chat-messages">
                 <div class="message bot-msg">Здравствуйте! Опишите вашу проблему. Я постараюсь помочь или подготовлю обращение к специалистам.</div>
             </div>
+
             <div class="input-area">
                 <input type="text" id="user-input" placeholder="Введите ваш вопрос..." autocomplete="off" />
                 <button onclick="handleSend()">Отправить</button>
             </div>
+
             <div style="padding: 0 25px 25px;">
                 <button class="skip-btn" onclick="startClassification('Критический')">⚡ Сразу вызвать оператора</button>
             </div>
@@ -281,11 +286,63 @@
         import { pipeline } from 'https://esm.sh/@huggingface/transformers@3.8.1';
 
         const departments = ["Техническая поддержка", "Финансовый отдел", "Абонентский отдел", "Общая поддержка"];
+
         const knowledgeBase = [
-            { keywords: ['интернет', 'не работает', 'связь', 'сеть', 'wi-fi', 'вайфай'], solution: "Проверьте питание роутера и плотность кабеля в порту WAN. Попробуйте перезагрузку устройства.", category: "Техническая поддержка" },
-            { keywords: ['деньги', 'баланс', 'оплата', 'счет', 'платеж'], solution: "Баланс можно проверить в Личном кабинете. При нулевом балансе доступен 'Доверительный платеж'.", category: "Финансовый отдел" },
-            { keywords: ['тариф', 'сменить', 'договор', 'подключить', 'акция', 'телевидение'], solution: "Вы можете изменить тарифный план в Личном кабинете или мобильном приложении.", category: "Абонентский отдел" }
+            {
+                keywords: ['интернет', 'не работает', 'связь', 'сеть', 'wi-fi', 'вайфай', 'роутер', 'wifi', 'пинг'],
+                solution: "Проверьте питание роутера и кабель WAN. Затем перезагрузите роутер и устройство, с которого подключаетесь.",
+                category: "Техническая поддержка"
+            },
+            {
+                keywords: ['деньги', 'баланс', 'оплата', 'счет', 'платеж', 'пополнить', 'списание', 'тариф', 'долг'],
+                solution: "Баланс можно проверить в личном кабинете. При нулевом балансе доступен доверительный платеж.",
+                category: "Финансовый отдел"
+            },
+            {
+                keywords: ['тариф', 'сменить', 'договор', 'подключить', 'акция', 'телевидение', 'услуга', 'заявление'],
+                solution: "Тарифный план можно изменить в личном кабинете или через мобильное приложение.",
+                category: "Абонентский отдел"
+            }
         ];
+
+        const departmentProfiles = {
+            "Техническая поддержка": [
+                "не работает интернет",
+                "пропал wifi",
+                "роутер не раздает сеть",
+                "медленный интернет",
+                "обрыв соединения",
+                "не открываются сайты",
+                "проблемы со связью",
+                "не грузится страница"
+            ],
+            "Финансовый отдел": [
+                "не проходит оплата",
+                "баланс нулевой",
+                "пополнить счет",
+                "ошибка платежа",
+                "нужно проверить начисление",
+                "долг по счету",
+                "пропали деньги со счета",
+                "списание средств"
+            ],
+            "Абонентский отдел": [
+                "сменить тариф",
+                "расторгнуть договор",
+                "подключить услугу",
+                "изменить данные договора",
+                "нужна консультация по тарифу",
+                "подключить телевидение",
+                "оформить заявление",
+                "изменить пакет услуг"
+            ],
+            "Общая поддержка": [
+                "нужна помощь",
+                "общий вопрос",
+                "не понимаю, что делать",
+                "консультация по услуге"
+            ]
+        };
 
         const messagesContainer = document.getElementById('chat-messages');
         const logsContainer = document.getElementById('logs');
@@ -294,7 +351,8 @@
         let hasActiveTicket = false;
         let isWaitingForDetails = false;
         let modelLoadingPromise = null;
-        let generator = null;
+        let extractor = null;
+        let departmentVectors = {};
         let ticketData = {
             id: null,
             category: "",
@@ -304,8 +362,7 @@
             generatedReply: ""
         };
 
-        // ЗАМЕНА 1: Перешли на более умную модель с русским языком
-        const MODEL_ID = 'Xenova/Qwen1.5-0.5B-Chat';
+        const MODEL_ID = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2';
 
         function setLogs(text) {
             logsContainer.innerHTML = text;
@@ -319,39 +376,110 @@
             modelStatus.textContent = text;
         }
 
+        function sanitizeText(value) {
+            return String(value || '').replace(/<[^>]*>/g, '').trim();
+        }
+
+        function cosineSimilarity(a, b) {
+            let dot = 0;
+            let normA = 0;
+            let normB = 0;
+
+            for (let i = 0; i < a.length; i++) {
+                dot += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+
+            return dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8);
+        }
+
+        function toVector(output) {
+            if (!output) return [];
+            if (output.data && typeof output.data.length === 'number') return Array.from(output.data);
+            if (Array.isArray(output)) return output.flat(Infinity).map(Number);
+            if (output.tolist) return output.tolist().flat(Infinity).map(Number);
+            return [];
+        }
+
+        function normalizeVector(vec) {
+            const norm = Math.sqrt(vec.reduce((sum, x) => sum + x * x, 0)) + 1e-8;
+            return vec.map(x => x / norm);
+        }
+
+        function averageVectors(vectors) {
+            const len = vectors[0].length;
+            const avg = new Array(len).fill(0);
+
+            for (const vec of vectors) {
+                for (let i = 0; i < len; i++) avg[i] += vec[i];
+            }
+
+            for (let i = 0; i < len; i++) avg[i] /= vectors.length;
+            return normalizeVector(avg);
+        }
+
+        async function embed(text) {
+            const output = await extractor(text, { pooling: 'mean', normalize: true });
+            const vector = toVector(output);
+            if (!vector.length) {
+                throw new Error('Не удалось получить эмбеддинги от модели');
+            }
+            return vector;
+        }
+
+        async function precomputeDepartmentVectors() {
+            departmentVectors = {};
+
+            for (const [dept, phrases] of Object.entries(departmentProfiles)) {
+                const vectors = [];
+                for (const phrase of phrases) {
+                    vectors.push(await embed(phrase));
+                }
+                departmentVectors[dept] = averageVectors(vectors);
+            }
+        }
+
         async function loadModel() {
-            if (generator) return generator;
+            if (extractor) return extractor;
+
             if (!modelLoadingPromise) {
                 setModelStatus('Загрузка модели...');
                 setLogs('> Подготовка локальной модели...<br>');
 
-                const options = {
-                    device: 'webgpu', // Qwen отлично работает на современных GPU
-                    dtype: 'q4',
-                };
+                modelLoadingPromise = pipeline('feature-extraction', MODEL_ID, {
+                    device: 'webgpu',
+                    dtype: 'q4'
+                }).then(async (pipe) => {
+                    extractor = pipe;
+                    setModelStatus('Модель готова');
+                    appendLog('> Модель загружена в браузере');
+                    await precomputeDepartmentVectors();
+                    appendLog('> Эмбеддинги отделов подготовлены');
+                    return pipe;
+                }).catch(async (error) => {
+                    console.warn('WebGPU недоступен, пробуем CPU/WASM...', error);
+                    appendLog('> Переход на CPU/WASM...');
 
-                // ЗАМЕНА 2: Используем text-generation вместо text2text-generation
-                modelLoadingPromise = pipeline('text-generation', MODEL_ID, options)
-                    .then((pipe) => {
-                        generator = pipe;
-                        setModelStatus('Модель готова (GPU)');
-                        appendLog('> Модель загружена через WebGPU');
-                        return pipe;
-                    })
-                    .catch(async (error) => {
-                        console.warn("WebGPU недоступен, пробуем CPU (WASM)...", error);
-                        appendLog('> Переход на процессорный режим (WASM)...');
-                        const cpuPipe = await pipeline('text-generation', MODEL_ID, { dtype: 'q4' });
-                        generator = cpuPipe;
-                        setModelStatus('Модель готова (CPU)');
-                        return cpuPipe;
+                    const cpuPipe = await pipeline('feature-extraction', MODEL_ID, {
+                        dtype: 'q8'
                     });
-            }
-            return modelLoadingPromise;
-        }
 
-        function sanitizeText(value) {
-            return String(value || '').replace(/<[^>]*>/g, '').trim();
+                    extractor = cpuPipe;
+                    setModelStatus('Модель готова (CPU)');
+                    await precomputeDepartmentVectors();
+                    appendLog('> Эмбеддинги отделов подготовлены');
+                    return cpuPipe;
+                }).catch((error) => {
+                    console.error('Не удалось загрузить модель:', error);
+                    setModelStatus('Режим без модели');
+                    appendLog('> Ошибка загрузки модели, включён fallback');
+                    extractor = null;
+                    return null;
+                });
+            }
+
+            return modelLoadingPromise;
         }
 
         function fallbackAnalyze(text) {
@@ -381,56 +509,72 @@
             return {
                 category: 'Общая поддержка',
                 priority: 'Высокий',
-                summary: 'Запрос не удалось уверенно классифицировать по ключевым словам.',
-                response: 'Я не нашёл точный ответ в базе знаний. Могу подготовить заявку специалистам и передать краткое описание обращения.',
+                summary: 'Запрос не удалось уверенно классифицировать.',
+                response: 'Я не нашёл точный ответ в базе знаний. Могу подготовить заявку специалистам.',
                 createTicket: true
             };
         }
 
-        async function analyzeWithModel(text) {
-            const pipe = await loadModel();
-            if (!pipe) return fallbackAnalyze(text);
+        function getPriority(text, score) {
+            const low = text.toLowerCase();
 
-            // ЗАМЕНА 3: Промпт в формате ChatML для Qwen
-            const prompt = `<|im_start|>system\nТы — техническая поддержка интернет-провайдера "Связь-Телеком". Твоя задача — дать клиенту один короткий и полезный совет на русском языке (1-2 предложения).<|im_end|>\n<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
+            if (/(критич|авар|сроч|совсем не работает|нет интернета|полностью пропал)/i.test(low)) {
+                return 'Критический';
+            }
+            if (/(не работает|пропал|ошибка|разрыв|отвал|долго|зависает)/i.test(low)) {
+                return 'Высокий';
+            }
+            if (score < 0.45) {
+                return 'Средний';
+            }
+            return 'Средний';
+        }
+
+        async function analyzeWithModel(text) {
+            await loadModel();
+            if (!extractor || !Object.keys(departmentVectors).length) {
+                return fallbackAnalyze(text);
+            }
 
             try {
-                const result = await pipe(prompt, {
-                    max_new_tokens: 60,
-                    temperature: 0.3,
-                    repetition_penalty: 1.1,
-                    do_sample: true,
-                    // ЗАМЕНА 4: Не возвращать промпт в ответе
-                    return_full_text: false
-                });
+                const inputVector = await embed(text);
 
-                let generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
-                console.log("ОТВЕТ НЕЙРОСЕТИ:", generated);
+                let bestCategory = 'Общая поддержка';
+                let bestScore = -1;
 
-                // Очищаем хвосты от формата ChatML, если они проскочили
-                const finalResponse = generated.replace(/<\|im_end\|>/g, '').trim();
-
-                if (!finalResponse) throw new Error("Пустой ответ от модели");
-
-                let category = "Общая поддержка";
-                const lowText = text.toLowerCase();
-                if (lowText.includes("интернет") || lowText.includes("пинг") || lowText.includes("отваливается")) {
-                    category = "Техническая поддержка";
-                } else if (lowText.includes("деньги") || lowText.includes("баланс") || lowText.includes("оплат")) {
-                    category = "Финансовый отдел";
-                } else if (lowText.includes("тариф") || lowText.includes("договор")) {
-                    category = "Абонентский отдел";
+                for (const [dept, deptVector] of Object.entries(departmentVectors)) {
+                    const score = cosineSimilarity(inputVector, deptVector);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCategory = dept;
+                    }
                 }
 
+                const lowText = text.toLowerCase();
+
+                let bestMatch = null;
+                let maxMatches = 0;
+                for (const item of knowledgeBase) {
+                    const matches = item.keywords.filter(word => lowText.includes(word));
+                    if (matches.length > maxMatches) {
+                        maxMatches = matches.length;
+                        bestMatch = item;
+                    }
+                }
+
+                const priority = getPriority(text, bestScore);
+
                 return {
-                    category: category,
-                    priority: lowText.includes("не работает") ? "Высокий" : "Средний",
-                    summary: text.slice(0, 60),
-                    response: finalResponse,
+                    category: bestCategory,
+                    priority,
+                    summary: text.slice(0, 80),
+                    response: bestMatch
+                        ? bestMatch.solution
+                        : 'Я понял обращение и подготовлю заявку специалистам. Оставьте, пожалуйста, детали, если проблема повторяется.',
                     createTicket: true
                 };
             } catch (error) {
-                console.error("Ошибка генерации:", error);
+                console.error('Ошибка анализа:', error);
                 return fallbackAnalyze(text);
             }
         }
@@ -438,6 +582,7 @@
         function createOptionButtons(options) {
             const btnContainer = document.createElement('div');
             btnContainer.style.marginTop = '10px';
+
             options.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.className = 'option-btn';
@@ -445,6 +590,7 @@
                 btn.onclick = () => handleOptionSelection(opt);
                 btnContainer.appendChild(btn);
             });
+
             messagesContainer.appendChild(btnContainer);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -467,14 +613,14 @@
                 : '';
 
             ticketInfo.innerHTML = `
-                            <div class="status-tag">ID: #${ticketData.id}</div><br>
-                            <div style="margin-top:10px;">
-                                <b>Отдел:</b> ${ticketData.category}<br>
-                                <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
-                                <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
-                                ${detailsHtml}
-                            </div>
-                        `;
+                    <div class="status-tag">ID: #${ticketData.id}</div><br>
+                    <div style="margin-top:10px;">
+                        <b>Отдел:</b> ${ticketData.category}<br>
+                        <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
+                        <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
+                        ${detailsHtml}
+                    </div>
+                `;
         }
 
         async function handleSend() {
@@ -502,7 +648,7 @@
             }
 
             setLogs(`> Анализ запроса: "${sanitizeText(text).toLowerCase()}"<br>`);
-            appendLog('> Запуск нейросетевого модуля...');
+            appendLog('> Запуск локального ИИ...');
 
             addMessage('Анализирую обращение...', 'bot-msg');
 
@@ -535,9 +681,11 @@
                 hasActiveTicket = false;
                 ticketData.category = '';
                 startClassification('Средний');
+
             } else if (choice === 'Дополнить детали') {
                 isWaitingForDetails = true;
                 addMessage('Пожалуйста, напишите подробности, и я прикреплю их к вашей заявке.', 'bot-msg');
+
             } else if (choice === 'Отменить заявку') {
                 hasActiveTicket = false;
                 ticketData.details = [];
@@ -545,6 +693,7 @@
                 document.getElementById('final-ticket').style.display = 'none';
                 addMessage('Заявка успешно отменена.', 'bot-msg');
                 setLogs(`> Заявка #${ticketData.id} аннулирована.<br>`);
+
             } else if (choice === 'Да, создать заявку') {
                 if (!ticketData.category) {
                     startClassification('Средний');
@@ -555,8 +704,10 @@
                 addMessage(`Принято. Отправляю тикет в <b>${ticketData.category}</b>. Приоритет: <b>${ticketData.priority}</b>.`, 'bot-msg');
                 refreshTicketView();
                 setLogs(`> Статус: заявка заблокирована<br>> ID: #${ticketData.id}<br>`);
+
             } else if (choice === 'Нет, спасибо') {
                 addMessage('Рад был помочь!', 'bot-msg');
+
             } else if (departments.includes(choice)) {
                 hasActiveTicket = true;
                 ticketData.id = Math.floor(Math.random() * 9000) + 1000;
