@@ -391,29 +391,37 @@
             const pipe = await loadModel();
             if (!pipe) return fallbackAnalyze(text);
 
-            // Упрощаем промпт, чтобы 0.5B модель не путалась
+            // Даем модели более четкую роль и пример формата
             const prompt = `<|im_start|>system
-Ты — помощник поддержки. Ответь коротко (1 предложение) на русском.<|im_end|>
+Ты — бот техподдержки. Пиши только на русском языке. Краткий ответ в одно предложение.<|im_end|>
 <|im_start|>user
-${text}<|im_end|>
+Клиент говорит: "${text}". Твой совет:<|im_end|>
 <|im_start|>assistant\n`;
 
             try {
                 const result = await pipe(prompt, {
-                    max_new_tokens: 40,
-                    temperature: 0.1, // Снижаем температуру для большей четкости
-                    repetition_penalty: 1.2,
-                    do_sample: false, // Отключаем случайность для стабильности
+                    max_new_tokens: 45,
+                    temperature: 0.2, // Чуть выше, чтобы не было зацикливаний, но ниже для стабильности
+                    repetition_penalty: 1.3, // Увеличиваем штраф, чтобы не повторялся и не уходил в бред
+                    do_sample: true,
+                    top_k: 20,
                     return_full_text: false
                 });
 
                 let generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
 
-                // Очистка от технических артефактов
-                let finalResponse = generated.split('<|im_end|>')[0].trim();
-                finalResponse = finalResponse.replace(/[^\x20-\x7E\u0400-\u04FF]/g, ''); // Убираем странные символы
+                // 1. Обрезаем всё, что идет после потенциального конца предложения или стоп-тегов
+                let finalResponse = generated.split('<|im_end|>')[0].split('\n')[0].trim();
 
-                if (!finalResponse || finalResponse.length < 5) throw new Error("Low quality");
+                // 2. Фильтр "Китайской стены": оставляем только кириллицу, латиницу и знаки препинания
+                // Это жестко уберет любые иероглифы, если модель решит на них переключиться
+                finalResponse = finalResponse.replace(/[^а-яА-ЯёЁa-zA-Z0-9\s.,!?\-]/g, '').trim();
+
+                // 3. Если после чистки осталось слишком мало или пусто — идем в запасной вариант
+                if (finalResponse.length < 10) {
+                    console.log("Результат слишком короткий или поломанный, fallback...");
+                    return fallbackAnalyze(text);
+                }
 
                 return {
                     category: text.toLowerCase().includes("интернет") ? "Техническая поддержка" : "Общая поддержка",
@@ -423,7 +431,6 @@ ${text}<|im_end|>
                     createTicket: true
                 };
             } catch (error) {
-                console.log("Используем запасной вариант из-за ошибки модели");
                 return fallbackAnalyze(text);
             }
         }
