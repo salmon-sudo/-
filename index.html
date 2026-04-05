@@ -398,44 +398,55 @@
             };
         }
 
+        function cleanAIResponse(text) {
+            return text
+                .replace(/^(Ответ:|Response:|AI:)/i, '')
+                .replace(/["{}[\]]/g, '') // Убираем лишние скобки, если модель их выплюнула вне JSON
+                .trim();
+        }
+
         async function analyzeWithModel(text) {
             const pipe = await loadModel();
             if (!pipe) return fallbackAnalyze(text);
 
-            // Упрощенный промпт без JSON (меньше шансов на ошибку)
-            const prompt = `Контекст: Ты поддержка провайдера. 
-            Пользователь пишет: "${text}"
-            Определи отдел (Техническая поддержка, Финансовый отдел или Абонентский отдел) и дай краткий совет.`;
+            // Максимально строгий и простой промпт
+            const prompt = `Задание: Ответь как поддержка провайдера на русском языке.
+            Сообщение клиента: "${text}"
+            Ответ (только текст совета):`;
 
             try {
                 const result = await pipe(prompt, {
-                    max_new_tokens: 100,
-                    temperature: 0.3, // Снижаем температуру для четкости
+                    max_new_tokens: 80,
+                    temperature: 0.3, // Низкая температура = меньше бреда
+                    repetition_penalty: 1.2,
                     do_sample: true
                 });
 
                 const generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
                 console.log("ОТВЕТ НЕЙРОСЕТИ:", generated);
 
-                // Простая логика определения категории по ответу
+                const finalResponse = cleanAIResponse(generated);
+
+                // Сами определяем категорию по ключевым словам в запросе пользователя
                 let category = "Общая поддержка";
-                if (generated.toLowerCase().includes("техн") || text.toLowerCase().includes("интернет")) {
+                const lowText = text.toLowerCase();
+                if (lowText.includes("интернет") || lowText.includes("пинг") || lowText.includes("отваливается")) {
                     category = "Техническая поддержка";
-                } else if (generated.toLowerCase().includes("финанс") || text.toLowerCase().includes("деньги")) {
+                } else if (lowText.includes("деньги") || lowText.includes("баланс") || lowText.includes("оплат")) {
                     category = "Финансовый отдел";
-                } else if (generated.toLowerCase().includes("абонент") || text.toLowerCase().includes("тариф")) {
+                } else if (lowText.includes("тариф") || lowText.includes("договор")) {
                     category = "Абонентский отдел";
                 }
 
                 return {
                     category: category,
-                    priority: "Средний",
-                    summary: text.slice(0, 50) + "...",
-                    response: generated, // Прямой ответ нейросети пользователю
+                    priority: lowText.includes("не работает") ? "Высокий" : "Средний",
+                    summary: text.slice(0, 60),
+                    response: finalResponse || "Специалист скоро изучит вашу ситуацию.",
                     createTicket: true
                 };
             } catch (error) {
-                console.error("Ошибка:", error);
+                console.error("Ошибка генерации:", error);
             }
 
             return fallbackAnalyze(text);
