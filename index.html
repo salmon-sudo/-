@@ -402,42 +402,40 @@
             const pipe = await loadModel();
             if (!pipe) return fallbackAnalyze(text);
 
-            const prompt = `Task: Analyze support ticket. Language: Russian. Return ONLY JSON.
-Context: You are a telecom assistant.
-User message: "${text}"
-
-JSON Format:
-{
-      "category": "Техническая поддержка|Финансовый отдел|Абонентский отдел|Общая поддержка",
-      "priority": "Критический|Высокий|Средний",
-      "summary": "Short summary in Russian",
-      "response": "Helpful answer in Russian",
-      "createTicket": true
-}`;
+            // Упрощенный промпт без JSON (меньше шансов на ошибку)
+            const prompt = `Контекст: Ты поддержка провайдера. 
+            Пользователь пишет: "${text}"
+            Определи отдел (Техническая поддержка, Финансовый отдел или Абонентский отдел) и дай краткий совет.`;
 
             try {
                 const result = await pipe(prompt, {
-                    max_new_tokens: 120,
-                    temperature: 0.6,
-                    repetition_penalty: 1.2,
+                    max_new_tokens: 100,
+                    temperature: 0.3, // Снижаем температуру для четкости
                     do_sample: true
                 });
 
                 const generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
-                console.log("ПОЛНЫЙ ОТВЕТ МОДЕЛИ:", generated); // Теперь ты увидишь это в консоли F12
+                console.log("ОТВЕТ НЕЙРОСЕТИ:", generated);
 
-                const parsed = parseJsonFromModel(generated);
-                if (parsed && parsed.category && parsed.response) {
-                    return {
-                        category: parsed.category,
-                        priority: parsed.priority || 'Средний',
-                        summary: parsed.summary || text.slice(0, 120),
-                        response: parsed.response,
-                        createTicket: Boolean(parsed.createTicket)
-                    };
+                // Простая логика определения категории по ответу
+                let category = "Общая поддержка";
+                if (generated.toLowerCase().includes("техн") || text.toLowerCase().includes("интернет")) {
+                    category = "Техническая поддержка";
+                } else if (generated.toLowerCase().includes("финанс") || text.toLowerCase().includes("деньги")) {
+                    category = "Финансовый отдел";
+                } else if (generated.toLowerCase().includes("абонент") || text.toLowerCase().includes("тариф")) {
+                    category = "Абонентский отдел";
                 }
+
+                return {
+                    category: category,
+                    priority: "Средний",
+                    summary: text.slice(0, 50) + "...",
+                    response: generated, // Прямой ответ нейросети пользователю
+                    createTicket: true
+                };
             } catch (error) {
-                console.error("Генерация прервана:", error);
+                console.error("Ошибка:", error);
             }
 
             return fallbackAnalyze(text);
