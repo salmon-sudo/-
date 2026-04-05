@@ -391,46 +391,39 @@
             const pipe = await loadModel();
             if (!pipe) return fallbackAnalyze(text);
 
-            // ЗАМЕНА 3: Промпт в формате ChatML для Qwen
-            const prompt = `<|im_start|>system\nТы — техническая поддержка интернет-провайдера "Связь-Телеком". Твоя задача — дать клиенту один короткий и полезный совет на русском языке (1-2 предложения).<|im_end|>\n<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
+            // Упрощаем промпт, чтобы 0.5B модель не путалась
+            const prompt = `<|im_start|>system
+Ты — помощник поддержки. Ответь коротко (1 предложение) на русском.<|im_end|>
+<|im_start|>user
+${text}<|im_end|>
+<|im_start|>assistant\n`;
 
             try {
                 const result = await pipe(prompt, {
-                    max_new_tokens: 60,
-                    temperature: 0.3,
-                    repetition_penalty: 1.1,
-                    do_sample: true,
-                    // ЗАМЕНА 4: Не возвращать промпт в ответе
+                    max_new_tokens: 40,
+                    temperature: 0.1, // Снижаем температуру для большей четкости
+                    repetition_penalty: 1.2,
+                    do_sample: false, // Отключаем случайность для стабильности
                     return_full_text: false
                 });
 
                 let generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
-                console.log("ОТВЕТ НЕЙРОСЕТИ:", generated);
 
-                // Очищаем хвосты от формата ChatML, если они проскочили
-                const finalResponse = generated.replace(/<\|im_end\|>/g, '').trim();
+                // Очистка от технических артефактов
+                let finalResponse = generated.split('<|im_end|>')[0].trim();
+                finalResponse = finalResponse.replace(/[^\x20-\x7E\u0400-\u04FF]/g, ''); // Убираем странные символы
 
-                if (!finalResponse) throw new Error("Пустой ответ от модели");
-
-                let category = "Общая поддержка";
-                const lowText = text.toLowerCase();
-                if (lowText.includes("интернет") || lowText.includes("пинг") || lowText.includes("отваливается")) {
-                    category = "Техническая поддержка";
-                } else if (lowText.includes("деньги") || lowText.includes("баланс") || lowText.includes("оплат")) {
-                    category = "Финансовый отдел";
-                } else if (lowText.includes("тариф") || lowText.includes("договор")) {
-                    category = "Абонентский отдел";
-                }
+                if (!finalResponse || finalResponse.length < 5) throw new Error("Low quality");
 
                 return {
-                    category: category,
-                    priority: lowText.includes("не работает") ? "Высокий" : "Средний",
-                    summary: text.slice(0, 60),
+                    category: text.toLowerCase().includes("интернет") ? "Техническая поддержка" : "Общая поддержка",
+                    priority: "Средний",
+                    summary: text.slice(0, 50),
                     response: finalResponse,
                     createTicket: true
                 };
             } catch (error) {
-                console.error("Ошибка генерации:", error);
+                console.log("Используем запасной вариант из-за ошибки модели");
                 return fallbackAnalyze(text);
             }
         }
