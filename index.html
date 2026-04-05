@@ -258,7 +258,7 @@
                 <div class="message bot-msg">Здравствуйте! Опишите вашу проблему. Я постараюсь помочь или подготовлю обращение к специалистам.</div>
             </div>
             <div class="input-area">
-                <input type="text" id="user-input" placeholder="Введите ваш вопрос..." />
+                <input type="text" id="user-input" placeholder="Введите ваш вопрос..." autocomplete="off" />
                 <button onclick="handleSend()">Отправить</button>
             </div>
             <div style="padding: 0 25px 25px;">
@@ -304,7 +304,8 @@
             generatedReply: ""
         };
 
-        const MODEL_ID = 'Xenova/LaMini-Flan-T5-783M';
+        // ЗАМЕНА 1: Перешли на более умную модель с русским языком
+        const MODEL_ID = 'Xenova/Qwen1.5-0.5B-Chat';
 
         function setLogs(text) {
             logsContainer.innerHTML = text;
@@ -324,13 +325,13 @@
                 setModelStatus('Загрузка модели...');
                 setLogs('> Подготовка локальной модели...<br>');
 
-                // Оптимизация q4 делает модель легкой для Ryzen 5 и быстрой для RTX 4060
                 const options = {
-                    device: 'webgpu',
+                    device: 'webgpu', // Qwen отлично работает на современных GPU
                     dtype: 'q4',
                 };
 
-                modelLoadingPromise = pipeline('text2text-generation', MODEL_ID, options)
+                // ЗАМЕНА 2: Используем text-generation вместо text2text-generation
+                modelLoadingPromise = pipeline('text-generation', MODEL_ID, options)
                     .then((pipe) => {
                         generator = pipe;
                         setModelStatus('Модель готова (GPU)');
@@ -340,8 +341,7 @@
                     .catch(async (error) => {
                         console.warn("WebGPU недоступен, пробуем CPU (WASM)...", error);
                         appendLog('> Переход на процессорный режим (WASM)...');
-                        // Резервный запуск на процессоре с легким весом q4
-                        const cpuPipe = await pipeline('text2text-generation', MODEL_ID, { dtype: 'q4' });
+                        const cpuPipe = await pipeline('text-generation', MODEL_ID, { dtype: 'q4' });
                         generator = cpuPipe;
                         setModelStatus('Модель готова (CPU)');
                         return cpuPipe;
@@ -352,17 +352,6 @@
 
         function sanitizeText(value) {
             return String(value || '').replace(/<[^>]*>/g, '').trim();
-        }
-
-        function parseJsonFromModel(text) {
-            const cleaned = String(text || '').trim();
-            const match = cleaned.match(/\{[\s\S]*\}/);
-            if (!match) return null;
-            try {
-                return JSON.parse(match[0]);
-            } catch {
-                return null;
-            }
         }
 
         function fallbackAnalyze(text) {
@@ -398,36 +387,31 @@
             };
         }
 
-        function cleanAIResponse(text) {
-            return text
-                .replace(/^(Ответ:|Response:|AI:)/i, '')
-                .replace(/["{}[\]]/g, '') // Убираем лишние скобки, если модель их выплюнула вне JSON
-                .trim();
-        }
-
         async function analyzeWithModel(text) {
             const pipe = await loadModel();
             if (!pipe) return fallbackAnalyze(text);
 
-            // Максимально строгий и простой промпт
-            const prompt = `Задание: Ответь как поддержка провайдера на русском языке.
-            Сообщение клиента: "${text}"
-            Ответ (только текст совета):`;
+            // ЗАМЕНА 3: Промпт в формате ChatML для Qwen
+            const prompt = `<|im_start|>system\nТы — техническая поддержка интернет-провайдера "Связь-Телеком". Твоя задача — дать клиенту один короткий и полезный совет на русском языке (1-2 предложения).<|im_end|>\n<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
 
             try {
                 const result = await pipe(prompt, {
-                    max_new_tokens: 80,
-                    temperature: 0.3, // Низкая температура = меньше бреда
-                    repetition_penalty: 1.2,
-                    do_sample: true
+                    max_new_tokens: 60,
+                    temperature: 0.3,
+                    repetition_penalty: 1.1,
+                    do_sample: true,
+                    // ЗАМЕНА 4: Не возвращать промпт в ответе
+                    return_full_text: false
                 });
 
-                const generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
+                let generated = Array.isArray(result) ? result[0]?.generated_text : result?.generated_text;
                 console.log("ОТВЕТ НЕЙРОСЕТИ:", generated);
 
-                const finalResponse = cleanAIResponse(generated);
+                // Очищаем хвосты от формата ChatML, если они проскочили
+                const finalResponse = generated.replace(/<\|im_end\|>/g, '').trim();
 
-                // Сами определяем категорию по ключевым словам в запросе пользователя
+                if (!finalResponse) throw new Error("Пустой ответ от модели");
+
                 let category = "Общая поддержка";
                 const lowText = text.toLowerCase();
                 if (lowText.includes("интернет") || lowText.includes("пинг") || lowText.includes("отваливается")) {
@@ -442,14 +426,13 @@
                     category: category,
                     priority: lowText.includes("не работает") ? "Высокий" : "Средний",
                     summary: text.slice(0, 60),
-                    response: finalResponse || "Специалист скоро изучит вашу ситуацию.",
+                    response: finalResponse,
                     createTicket: true
                 };
             } catch (error) {
                 console.error("Ошибка генерации:", error);
+                return fallbackAnalyze(text);
             }
-
-            return fallbackAnalyze(text);
         }
 
         function createOptionButtons(options) {
@@ -484,14 +467,14 @@
                 : '';
 
             ticketInfo.innerHTML = `
-                        <div class="status-tag">ID: #${ticketData.id}</div><br>
-                        <div style="margin-top:10px;">
-                            <b>Отдел:</b> ${ticketData.category}<br>
-                            <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
-                            <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
-                            ${detailsHtml}
-                        </div>
-                    `;
+                            <div class="status-tag">ID: #${ticketData.id}</div><br>
+                            <div style="margin-top:10px;">
+                                <b>Отдел:</b> ${ticketData.category}<br>
+                                <b>Приоритет:</b> <span style="color: ${ticketData.priority === 'Критический' ? '#f44336' : (ticketData.priority === 'Высокий' ? '#ff9800' : '#ffca28')}">${ticketData.priority}</span><br>
+                                <b>Суть обращения:</b> ${ticketData.summary || 'Не указана'}<br>
+                                ${detailsHtml}
+                            </div>
+                        `;
         }
 
         async function handleSend() {
